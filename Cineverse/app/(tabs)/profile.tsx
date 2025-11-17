@@ -1,17 +1,17 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   StyleSheet,
   Text,
   View,
-  SectionList,
+  FlatList, // Trocamos SectionList por FlatList
   SafeAreaView,
   ActivityIndicator,
+  TouchableOpacity,
 } from 'react-native';
 import { Stack } from 'expo-router';
-// Corrigindo o caminho para subir dois níveis
 import { MovieCard } from '../../components/MovieCard';
-// Corrigindo o caminho para o contexto
-import { useMovieStatus } from '../MovieStatusContext';
+import { useMovieStatus } from '../../lib/MovieStatusContext';
+import { Ionicons } from '@expo/vector-icons';
 
 // --- Tipos ---
 interface Movie {
@@ -21,43 +21,50 @@ interface Movie {
   posterUrl: string;
 }
 
-interface Section {
-  title: string;
-  data: Movie[];
-}
+// Tipo para controlar a aba ativa
+type ActiveTab = 'liked' | 'saved' | 'disliked';
 
 export default function ProfileScreen() {
-  // Pega os dados brutos do contexto
-  const { allMovies, movieStatus, loading } = useMovieStatus();
+  const { allMovies, movieStatus, loading, session, signOut } = useMovieStatus();
 
-  // --- LÓGICA DE FILTRO CORRIGIDA ---
-  // Filtra as listas de filmes usando 'useMemo' para otimização
+  // --- NOVO ESTADO ---
+  // Controla qual botão está ativo. Começa em 'liked'.
+  const [activeTab, setActiveTab] = useState<ActiveTab>('liked');
+
+  // --- LÓGICA DE FILTRO (Sem mudança) ---
   const likedMovies = useMemo(
     () => allMovies.filter((movie) => movieStatus[movie.id]?.liked),
     [allMovies, movieStatus]
   );
-
   const dislikedMovies = useMemo(
     () => allMovies.filter((movie) => movieStatus[movie.id]?.disliked),
     [allMovies, movieStatus]
   );
-
   const savedMovies = useMemo(
     () => allMovies.filter((movie) => movieStatus[movie.id]?.saved),
     [allMovies, movieStatus]
   );
-  // --- FIM DA LÓGICA CORRIGIDA ---
 
-  // Cria as seções para a SectionList
-  const sections: Section[] = useMemo(
-    () =>
-      [
-        { title: 'Filmes que Gostei', data: likedMovies },
-        { title: 'Filmes que Não Gostei', data: dislikedMovies },
-        { title: 'Salvos para Ver Depois', data: savedMovies },
-      ].filter((section) => section.data.length > 0), // Remove seções vazias
-    [likedMovies, dislikedMovies, savedMovies]
-  );
+  // --- NOVO ---
+  // Decide qual lista mostrar baseado no estado 'activeTab'
+  const displayedData = useMemo(() => {
+    if (activeTab === 'liked') return likedMovies;
+    if (activeTab === 'saved') return savedMovies;
+    if (activeTab === 'disliked') return dislikedMovies;
+    return [];
+  }, [activeTab, likedMovies, dislikedMovies, savedMovies]);
+
+  // Mensagem de "vazio" dinâmica
+  const getEmptyMessage = () => {
+    switch (activeTab) {
+      case 'liked':
+        return 'Você ainda não curtiu nenhum filme.';
+      case 'saved':
+        return 'Sua lista de filmes salvos está vazia.';
+      case 'disliked':
+        return 'Você ainda não deu dislike em nenhum filme.';
+    }
+  };
 
   if (loading) {
     return (
@@ -76,20 +83,74 @@ export default function ProfileScreen() {
           title: 'Meu Perfil',
         }}
       />
-      {sections.length === 0 ? (
-        <View style={styles.loadingContainer}>
-          <Text style={styles.emptyText}>
-            Suas listas estão vazias. Comece a avaliar filmes!
+
+      {/* --- CABEÇALHO (Movemos para fora da lista) --- */}
+      <View style={styles.headerContainer}>
+        <Text style={styles.emailText}>
+          Logado como: {session?.user?.email}
+        </Text>
+        <TouchableOpacity style={styles.signOutButton} onPress={signOut}>
+          <Ionicons name="log-out-outline" size={20} color="#FF3B30" />
+          <Text style={styles.signOutText}>Sair</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* --- NOVOS BOTÕES (Controle Segmentado) --- */}
+      <View style={styles.segmentContainer}>
+        <TouchableOpacity
+          style={[
+            styles.segmentButton,
+            activeTab === 'liked' && styles.segmentButtonActive,
+          ]}
+          onPress={() => setActiveTab('liked')}>
+          <Text
+            style={[
+              styles.segmentText,
+              activeTab === 'liked' && styles.segmentTextActive,
+            ]}>
+            Gostei ({likedMovies.length})
           </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[
+            styles.segmentButton,
+            activeTab === 'saved' && styles.segmentButtonActive,
+          ]}
+          onPress={() => setActiveTab('saved')}>
+          <Text
+            style={[
+              styles.segmentText,
+              activeTab === 'saved' && styles.segmentTextActive,
+            ]}>
+            Salvos ({savedMovies.length})
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[
+            styles.segmentButton,
+            activeTab === 'disliked' && styles.segmentButtonActive,
+          ]}
+          onPress={() => setActiveTab('disliked')}>
+          <Text
+            style={[
+              styles.segmentText,
+              activeTab === 'disliked' && styles.segmentTextActive,
+            ]}>
+            Não Gostei ({dislikedMovies.length})
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* --- LISTA DE FILMES (Agora é FlatList) --- */}
+      {displayedData.length === 0 ? (
+        <View style={styles.emptyContainer}>
+          <Text style={styles.emptyText}>{getEmptyMessage()}</Text>
         </View>
       ) : (
-        <SectionList
-          sections={sections}
+        <FlatList
+          data={displayedData}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => <MovieCard movie={item} />}
-          renderSectionHeader={({ section: { title } }) => (
-            <Text style={styles.sectionHeader}>{title}</Text>
-          )}
           contentContainerStyle={styles.lista}
         />
       )}
@@ -97,7 +158,7 @@ export default function ProfileScreen() {
   );
 }
 
-// --- Estilos ---
+// --- ESTILOS ATUALIZADOS ---
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
@@ -109,8 +170,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 20,
   },
+  emptyContainer: {
+    flex: 1, // Faz a mensagem de "vazio" preencher o espaço
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
   emptyText: {
     color: '#8E8E93',
+    fontFamily: 'Inter-Regular',
     fontSize: 16,
     textAlign: 'center',
   },
@@ -119,12 +187,57 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     paddingBottom: 32,
   },
-  sectionHeader: {
-    fontSize: 24,
-    fontWeight: 'bold',
+  headerContainer: {
+    paddingVertical: 20,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#3A3A3C',
+  },
+  emailText: {
+    fontFamily: 'Inter-Regular',
+    color: '#E5E5EA',
+    fontSize: 16,
+    textAlign: 'center',
+    marginBottom: 15,
+  },
+  signOutButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#2C2C2E',
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  signOutText: {
+    color: '#FF3B30',
+    fontFamily: 'Inter-Bold',
+    fontSize: 16,
+    marginLeft: 8,
+  },
+  // --- NOVOS ESTILOS PARA OS BOTÕES ---
+  segmentContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#2C2C2E',
+    borderRadius: 8,
+    margin: 16,
+    padding: 2,
+  },
+  segmentButton: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 7,
+  },
+  segmentButtonActive: {
+    backgroundColor: '#007AFF', // Azul
+  },
+  segmentText: {
+    fontFamily: 'Inter-Regular',
     color: '#FFFFFF',
-    backgroundColor: '#1C1C1E',
-    paddingTop: 24,
-    paddingBottom: 12,
+    fontSize: 13,
+    textAlign: 'center',
+  },
+  segmentTextActive: {
+    fontFamily: 'Inter-Bold',
+    color: '#FFFFFF',
   },
 });

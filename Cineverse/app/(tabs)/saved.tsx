@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   StyleSheet,
   Text,
@@ -8,18 +8,17 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Stack } from 'expo-router';
-// Corrigindo o caminho para subir dois níveis
 import { MovieCard } from '../../components/MovieCard';
-// Corrigindo o caminho para o NOVO contexto
-import { useMovieStatus } from '../MovieStatusContext';
+// --- MUDANÇA AQUI ---
+import { useMovieStatus } from '../../lib/MovieStatusContext';
+// --- FIM DA MUDANÇA ---
 
 export default function SavedScreen() {
-  // Pega os filmes e o status de loading do NOVO contexto
   const { allMovies, movieStatus, loading } = useMovieStatus();
 
-  // Filtra a lista de filmes para mostrar apenas os salvos
-  const savedMovies = allMovies.filter(
-    (movie) => movieStatus[movie.id]?.saved
+  const savedMovies = useMemo(
+    () => allMovies.filter((movie) => movieStatus[movie.id]?.saved),
+    [allMovies, movieStatus]
   );
 
   if (loading) {
@@ -56,8 +55,6 @@ export default function SavedScreen() {
     </SafeAreaView>
   );
 }
-
-// --- Estilos ---
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
@@ -71,6 +68,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     color: '#8E8E93',
+    fontFamily: 'Inter-Regular',
     fontSize: 16,
     textAlign: 'center',
   },

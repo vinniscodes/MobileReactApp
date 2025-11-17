@@ -1,7 +1,7 @@
 import React from 'react';
 import { StyleSheet, Text, View, Image, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useMovieStatus } from '../app/MovieStatusContext'; // Importa o novo hook
+import { useMovieStatus } from '../lib/MovieStatusContext';
 
 // --- Tipos ---
 interface Movie {
@@ -16,14 +16,13 @@ interface MovieCardProps {
 }
 
 export const MovieCard: React.FC<MovieCardProps> = ({ movie }) => {
-  // Pega o status e as funções do novo contexto
   const { movieStatus, toggleLikeMovie, toggleDislikeMovie, toggleSaveMovie } =
     useMovieStatus();
 
   const status = movieStatus[movie.id] || {
     liked: false,
     disliked: false,
-  saved: false,
+    saved: false,
   };
 
   return (
@@ -38,46 +37,51 @@ export const MovieCard: React.FC<MovieCardProps> = ({ movie }) => {
         </Text>
       </View>
 
-      {/* --- BOTÕES DE AÇÃO --- */}
       <View style={styles.botoesContainer}>
-        {/* Botão Dislike */}
+        {/* --- MUDANÇA AQUI --- */}
+        {/* Botão Dislike (removemos a função 'style' e adicionamos 'activeOpacity') */}
         <TouchableOpacity
           onPress={() => toggleDislikeMovie(movie)}
-          style={styles.botao}>
+          style={styles.botao}
+          activeOpacity={0.7}>
           <Ionicons
             name={status.disliked ? 'thumbs-down' : 'thumbs-down-outline'}
             size={28}
-            color={status.disliked ? '#FF3B30' : '#FFFFFF'} // Vermelho
+            color={status.disliked ? '#FF3B30' : '#FFFFFF'}
           />
         </TouchableOpacity>
 
-        {/* Botão Salvar */}
+        {/* --- MUDANÇA AQUI --- */}
+        {/* Botão Salvar (removemos a função 'style' e adicionamos 'activeOpacity') */}
         <TouchableOpacity
           onPress={() => toggleSaveMovie(movie)}
-          style={styles.botao}>
+          style={styles.botao}
+          activeOpacity={0.7}>
           <Ionicons
             name={status.saved ? 'bookmark' : 'bookmark-outline'}
             size={28}
-            color={status.saved ? '#34C759' : '#FFFFFF'} // Verde
+            color={status.saved ? '#34C759' : '#FFFFFF'}
           />
         </TouchableOpacity>
 
-        {/* Botão Like */}
+        {/* --- MUDANÇA AQUI --- */}
+        {/* Botão Like (removemos a função 'style' e adicionamos 'activeOpacity') */}
         <TouchableOpacity
           onPress={() => toggleLikeMovie(movie)}
-          style={styles.botao}>
+          style={styles.botao}
+          activeOpacity={0.7}>
           <Ionicons
             name={status.liked ? 'heart' : 'heart-outline'}
             size={28}
-            color={status.liked ? '#007AFF' : '#FFFFFF'} // Azul
+            color={status.liked ? '#007AFF' : '#FFFFFF'}
           />
         </TouchableOpacity>
+        {/* --- FIM DAS MUDANÇAS --- */}
       </View>
     </View>
   );
 };
 
-// --- Estilos ---
 const styles = StyleSheet.create({
   cardContainer: {
     backgroundColor: '#2C2C2E',
@@ -101,12 +105,13 @@ const styles = StyleSheet.create({
   },
   titulo: {
     fontSize: 22,
-    fontWeight: 'bold',
+    fontFamily: 'Inter-Bold',
     color: '#FFFFFF',
     marginBottom: 8,
   },
   descricao: {
     fontSize: 14,
+    fontFamily: 'Inter-Regular',
     color: '#E5E5EA',
     lineHeight: 20,
   },
