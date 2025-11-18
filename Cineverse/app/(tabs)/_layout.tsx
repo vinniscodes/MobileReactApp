@@ -2,7 +2,6 @@ import React from 'react';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
-// Este é o layout APENAS da área logada (as abas)
 export default function TabsLayout() {
   return (
     <Tabs
@@ -31,6 +30,18 @@ export default function TabsLayout() {
           ),
         }}
       />
+      {/* --- NOVA ABA DE USUÁRIOS --- */}
+      <Tabs.Screen
+        name="users"
+        options={{
+          title: 'Usuários',
+          headerTitleAlign: 'center',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="people" color={color} size={size} />
+          ),
+        }}
+      />
+      {/* --- FIM DA NOVA ABA --- */}
       <Tabs.Screen
         name="saved"
         options={{

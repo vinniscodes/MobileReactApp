@@ -1,7 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { StyleSheet, Text, View, Image, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useMovieStatus } from '../lib/MovieStatusContext';
+import { ReviewModal } from './ReviewModal';
+import { useRouter } from 'expo-router'; // Importamos o Router
 
 // --- Tipos ---
 interface Movie {
@@ -18,6 +20,11 @@ interface MovieCardProps {
 export const MovieCard: React.FC<MovieCardProps> = ({ movie }) => {
   const { movieStatus, toggleLikeMovie, toggleDislikeMovie, toggleSaveMovie } =
     useMovieStatus();
+    
+  const router = useRouter(); // Hook de navegação
+
+  // Estado para controlar se o Modal está visível ou não
+  const [modalVisible, setModalVisible] = useState(false);
 
   const status = movieStatus[movie.id] || {
     liked: false,
@@ -25,25 +32,38 @@ export const MovieCard: React.FC<MovieCardProps> = ({ movie }) => {
     saved: false,
   };
 
+  // Função para navegar para os detalhes
+  const goToDetails = () => {
+    router.push({
+      pathname: '/movie/[id]',
+      params: { id: movie.id }
+    });
+  };
+
   return (
     <View style={styles.cardContainer}>
-      <Image source={{ uri: movie.posterUrl }} style={styles.poster} />
-      <View style={styles.infoContainer}>
-        <Text style={styles.titulo} numberOfLines={2}>
-          {movie.titulo}
-        </Text>
-        <Text style={styles.descricao} numberOfLines={3}>
-          {movie.descricao}
-        </Text>
-      </View>
+      {/* --- MUDANÇA AQUI --- */}
+      {/* Envolvemos o Poster e o Título em um botão para navegar */}
+      <TouchableOpacity onPress={goToDetails} activeOpacity={0.9}>
+        <Image source={{ uri: movie.posterUrl }} style={styles.poster} />
+        <View style={styles.infoContainer}>
+          <Text style={styles.titulo} numberOfLines={2}>
+            {movie.titulo}
+          </Text>
+          <Text style={styles.descricao} numberOfLines={3}>
+            {movie.descricao}
+          </Text>
+        </View>
+      </TouchableOpacity>
+      {/* --- FIM DA MUDANÇA --- */}
 
       <View style={styles.botoesContainer}>
-        {/* --- MUDANÇA AQUI --- */}
-        {/* Botão Dislike (removemos a função 'style' e adicionamos 'activeOpacity') */}
+        {/* Botão Dislike */}
         <TouchableOpacity
           onPress={() => toggleDislikeMovie(movie)}
           style={styles.botao}
-          activeOpacity={0.7}>
+          activeOpacity={0.7}
+        >
           <Ionicons
             name={status.disliked ? 'thumbs-down' : 'thumbs-down-outline'}
             size={28}
@@ -51,12 +71,12 @@ export const MovieCard: React.FC<MovieCardProps> = ({ movie }) => {
           />
         </TouchableOpacity>
 
-        {/* --- MUDANÇA AQUI --- */}
-        {/* Botão Salvar (removemos a função 'style' e adicionamos 'activeOpacity') */}
+        {/* Botão Salvar */}
         <TouchableOpacity
           onPress={() => toggleSaveMovie(movie)}
           style={styles.botao}
-          activeOpacity={0.7}>
+          activeOpacity={0.7}
+        >
           <Ionicons
             name={status.saved ? 'bookmark' : 'bookmark-outline'}
             size={28}
@@ -64,20 +84,39 @@ export const MovieCard: React.FC<MovieCardProps> = ({ movie }) => {
           />
         </TouchableOpacity>
 
-        {/* --- MUDANÇA AQUI --- */}
-        {/* Botão Like (removemos a função 'style' e adicionamos 'activeOpacity') */}
+        {/* Botão Like */}
         <TouchableOpacity
           onPress={() => toggleLikeMovie(movie)}
           style={styles.botao}
-          activeOpacity={0.7}>
+          activeOpacity={0.7}
+        >
           <Ionicons
             name={status.liked ? 'heart' : 'heart-outline'}
             size={28}
             color={status.liked ? '#007AFF' : '#FFFFFF'}
           />
         </TouchableOpacity>
-        {/* --- FIM DAS MUDANÇAS --- */}
+
+        {/* Botão de Avaliar (Estrela) */}
+        <TouchableOpacity
+          onPress={() => setModalVisible(true)}
+          style={styles.botao}
+          activeOpacity={0.7}
+        >
+          <Ionicons
+            name="star"
+            size={28}
+            color="#FFD700" // Dourado
+          />
+        </TouchableOpacity>
       </View>
+
+      {/* O Modal de Review */}
+      <ReviewModal
+        visible={modalVisible}
+        onClose={() => setModalVisible(false)}
+        movie={movie}
+      />
     </View>
   );
 };
@@ -123,7 +162,7 @@ const styles = StyleSheet.create({
     borderTopColor: '#3A3A3C',
   },
   botao: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 10,
     paddingVertical: 8,
   },
 });

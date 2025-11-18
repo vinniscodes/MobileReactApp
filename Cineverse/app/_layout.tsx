@@ -20,30 +20,26 @@ const AppRoot = () => {
 
   useEffect(() => {
     if (!fontsLoaded || loading) {
-      // Se fontes ou a sessão (do context) ainda estão carregando, não faz nada
       return;
     }
     
-    SplashScreen.hideAsync(); // Esconde o splash screen
+    SplashScreen.hideAsync();
 
     const inApp = segments[0] === '(tabs)';
 
     if (session && !inApp) {
-      // Se tem sessão E não está na área logada, manda para as tabs
-      // --- MUDANÇA AQUI ---
-      router.replace('/(tabs)'); // Navega para o grupo, não para o arquivo index
-      // --- FIM DA MUDANÇA ---
+      // Se logado, vai para as abas
+      // (O replace aqui é seguro porque as rotas movie/user são filhas do root agora)
+      // Mas só redirecionamos se estivermos na raiz ou auth
+      if (segments.length === 0 || segments[0] === 'auth') {
+         router.replace('/(tabs)');
+      }
     } else if (!session && inApp) {
-      // Se não tem sessão E está na área logada, manda para o login
-      router.replace('/auth');
-    } else if (!session && !inApp) {
-      // Se não tem sessão E não está na área logada (ex: está na tela /auth), manda para o auth
       router.replace('/auth');
     }
 
   }, [session, loading, fontsLoaded, segments, router]);
 
-  // Mostra um loading central enquanto as fontes ou a sessão carregam
   if (!fontsLoaded || loading) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#1C1C1E' }}>
@@ -52,17 +48,36 @@ const AppRoot = () => {
     );
   }
 
-  // A navegação principal agora é um Stack
-  // Isso permite que a tela de "auth" e as "(tabs)" vivam no mesmo nível
+  // --- AQUI ESTAVA O PROBLEMA ---
+  // Adicionamos as rotas de 'movie' e 'user' na lista
   return (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="auth" />
       <Stack.Screen name="(tabs)" />
+      
+      {/* Novas Rotas: Precisam estar aqui para o app saber que existem */}
+      <Stack.Screen 
+        name="movie/[id]" 
+        options={{ 
+          headerShown: true, // Queremos o botão de voltar nessas telas
+          title: 'Detalhes',
+          headerStyle: { backgroundColor: '#1C1C1E' },
+          headerTintColor: '#FFFFFF'
+        }} 
+      />
+      <Stack.Screen 
+        name="user/[id]" 
+        options={{ 
+          headerShown: true,
+          title: 'Perfil',
+          headerStyle: { backgroundColor: '#1C1C1E' },
+          headerTintColor: '#FFFFFF'
+        }} 
+      />
     </Stack>
   );
 };
 
-// O Layout principal agora SÓ provê o Contexto e o Statusbar
 export default function AppLayout() {
   return (
     <MovieStatusProvider>

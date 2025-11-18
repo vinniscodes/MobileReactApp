@@ -8,6 +8,7 @@ import {
   StyleSheet,
   Alert,
   ActivityIndicator,
+  ScrollView, // Adicionado para telas menores
 } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { Ionicons } from '@expo/vector-icons';
@@ -15,8 +16,12 @@ import { Ionicons } from '@expo/vector-icons';
 export default function AuthScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  // --- NOVO CAMPO ---
+  const [username, setUsername] = useState('');
+  // --- FIM NOVO CAMPO ---
+
   const [loading, setLoading] = useState(false);
-  const [isLogin, setIsLogin] = useState(true); // Alterna entre Login e Cadastro
+  const [isLogin, setIsLogin] = useState(true);
 
   async function signInWithEmail() {
     setLoading(true);
@@ -30,25 +35,53 @@ export default function AuthScreen() {
   }
 
   async function signUpWithEmail() {
+    if (username.length < 3) {
+      Alert.alert('Erro no Cadastro', 'O nome de usuário deve ter pelo menos 3 caracteres.');
+      return;
+    }
+    
     setLoading(true);
-    const { error } = await supabase.auth.signUp({
+    // --- MUDANÇA AQUI ---
+    // Passamos o 'username' para o Supabase
+    // O Gatilho (Trigger) que criamos no SQL vai usar isso
+    const { data, error } = await supabase.auth.signUp({
       email: email,
       password: password,
+      options: {
+        data: {
+          username: username, // Isso será pego pelo gatilho SQL
+        },
+      },
     });
+    // --- FIM DA MUDANÇA ---
 
     if (error) {
       Alert.alert('Erro no Cadastro', error.message);
     } else {
       Alert.alert('Sucesso!', 'Verifique seu e-mail para confirmar a conta.');
+      // O gatilho no Supabase cuidou de criar o perfil
     }
     setLoading(false);
   }
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <View style={styles.container}>
+      <ScrollView contentContainerStyle={styles.container}>
         <Ionicons name="film" size={80} color="#007AFF" />
         <Text style={styles.title}>Cineverse</Text>
+
+        {/* --- NOVO CAMPO VISÍVEL --- */}
+        {!isLogin && (
+          <TextInput
+            style={styles.input}
+            placeholder="Nome de Usuário (público)"
+            placeholderTextColor="#8E8E93"
+            value={username}
+            onChangeText={setUsername}
+            autoCapitalize="none"
+          />
+        )}
+        {/* --- FIM NOVO CAMPO --- */}
 
         <TextInput
           style={styles.input}
@@ -81,7 +114,13 @@ export default function AuthScreen() {
         )}
 
         <TouchableOpacity
-          onPress={() => setIsLogin(!isLogin)}
+          onPress={() => {
+            setIsLogin(!isLogin);
+            // Limpa os campos ao alternar
+            setUsername('');
+            setEmail('');
+            setPassword('');
+          }}
           style={styles.toggleButton}>
           <Text style={styles.toggleButtonText}>
             {isLogin
@@ -89,7 +128,7 @@ export default function AuthScreen() {
               : 'Já tem uma conta? Faça login'}
           </Text>
         </TouchableOpacity>
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -100,7 +139,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#1C1C1E',
   },
   container: {
-    flex: 1,
+    flexGrow: 1, // Permite o ScrollView funcionar
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
