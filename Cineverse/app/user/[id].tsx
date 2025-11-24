@@ -1,188 +1,168 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
-  StyleSheet,
-  Text,
+  SafeAreaView,
   View,
-  Image,
+  Text,
+  StyleSheet,
   ActivityIndicator,
   FlatList,
+  Image,
 } from 'react-native';
-import { useLocalSearchParams, Stack } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import { Stack, useLocalSearchParams } from 'expo-router';
 import { supabase } from '../../lib/supabase';
-import { StarRating } from '../../components/StarRating';
+import { Profile } from '../../lib/MovieStatusContext';
+import { MovieCard } from '../../components/MovieCard';
+import { Ionicons } from '@expo/vector-icons';
 
-const API_KEY = 'f0f837126ad3f38f1d78d397c936a14d';
-
-// Tipos
-interface Review {
-  id: number;
-  rating: number;
-  comment: string;
-  created_at: string;
-  user_id: string;
-  profiles: {
-    username: string;
-    avatar_url: string | null;
-  };
+// Tipos locais
+interface Movie {
+  id: string;
+  titulo: string;
+  descricao: string;
+  posterUrl: string;
 }
 
-interface MovieDetails {
-  id: number;
-  title: string;
-  overview: string;
-  poster_path: string;
-  backdrop_path: string;
-  vote_average: number;
-  release_date: string;
-}
+export default function UserProfileScreen() {
+  // Pega o 'id' do usuário da URL
+  const { id } = useLocalSearchParams<{ id: string }>();
 
-export default function MovieDetailsScreen() {
-  const { id } = useLocalSearchParams(); // Pega o ID do filme da URL
-  const [movie, setMovie] = useState<MovieDetails | null>(null);
-  const [reviews, setReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [movies, setMovies] = useState<Movie[]>([]);
 
   useEffect(() => {
-    const fetchData = async () => {
+    if (!id) return;
+
+    const loadData = async () => {
       setLoading(true);
       try {
-        // 1. Busca detalhes do filme na API do TMDB
-        const movieRes = await fetch(
-          `https://api.themoviedb.org/3/movie/${id}?api_key=${API_KEY}&language=pt-BR`
-        );
-        const movieData = await movieRes.json();
-        setMovie(movieData);
+        // 1. Pega o perfil público do usuário
+        const { data: profileData, error: profileError } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', id)
+          .single();
+        
+        if (profileError) throw profileError;
+        setProfile(profileData);
 
-        // 2. Busca os reviews desse filme no Supabase (com os perfis dos usuários)
-        const { data, error } = await supabase
-          .from('reviews')
-          .select('*, profiles(username, avatar_url)')
-          .eq('movie_id', id)
-          .order('created_at', { ascending: false });
+        // 2. Pega os filmes que ESSE usuário curtiu
+        const { data: statusData, error: statusError } = await supabase
+          .from('movie_status')
+          .select('*, movies(*)')
+          .eq('user_id', id)
+          .eq('liked', true);
 
-        if (error) throw error;
-        setReviews(data as any); 
+        if (statusError) throw statusError;
+
+        if (statusData) {
+          const formattedMovies = statusData
+            .filter(row => row.movies)
+            .map(row => ({
+              // @ts-ignore
+              id: row.movies.id.toString(),
+              // @ts-ignore
+              titulo: row.movies.title,
+              // @ts-ignore
+              descricao: row.movies.overview,
+              // @ts-ignore
+              posterUrl: row.movies.poster_url,
+            }));
+          setMovies(formattedMovies);
+        }
       } catch (e) {
-        console.error(e);
+        console.error("Erro ao carregar perfil público", e);
       } finally {
         setLoading(false);
       }
     };
 
-    if (id) fetchData();
+    loadData();
   }, [id]);
 
-  if (loading || !movie) {
+  if (loading || !profile) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#FFFFFF" />
-      </View>
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#FFFFFF" />
+        </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <View style={styles.container}>
-      <Stack.Screen 
-        options={{ 
-          title: 'Detalhes', 
-          headerStyle: { backgroundColor: '#1C1C1E' },
-          headerTitleStyle: { color: '#FFFFFF', fontFamily: 'Inter-Bold' },
-          headerTintColor: '#007AFF'
-        }} 
-      />
+    <SafeAreaView style={styles.safeArea}>
+      <Stack.Screen options={{ title: `@${profile.username}` }} />
       
       <FlatList
-        data={reviews}
-        keyExtractor={(item) => item.id.toString()}
-        // O Header da lista contém as informações do filme
-        ListHeaderComponent={() => (
-          <View>
-            {/* Imagem de Fundo (Backdrop) */}
-            <Image
-              source={{ uri: `https://image.tmdb.org/t/p/w500${movie.backdrop_path || movie.poster_path}` }}
-              style={styles.backdrop}
-            />
-            
-            <View style={styles.infoContainer}>
-              <Text style={styles.title}>{movie.title}</Text>
-              
-              <View style={styles.metaRow}>
-                <Ionicons name="calendar" size={16} color="#8E8E93" />
-                <Text style={styles.metaText}>{movie.release_date?.split('-')[0]}</Text>
-                <View style={{ width: 16 }} />
-                <Ionicons name="star" size={16} color="#FFD700" />
-                <Text style={styles.metaText}>{movie.vote_average.toFixed(1)} (TMDB)</Text>
+        data={movies}
+        keyExtractor={(item) => item.id}
+        renderItem={({ item }) => <MovieCard movie={item} />}
+        contentContainerStyle={styles.lista}
+        ListHeaderComponent={
+          <View style={styles.headerContainer}>
+            {/* Avatar do Usuário */}
+            {profile.avatar_url ? (
+              <Image source={{ uri: profile.avatar_url }} style={styles.avatarImage} />
+            ) : (
+              <View style={styles.avatarPlaceholder}>
+                <Ionicons name="person" size={60} color="#1C1C1E" />
               </View>
-              
-              <Text style={styles.overview}>{movie.overview}</Text>
-            </View>
-
-            {/* Divisória de Reviews */}
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Reviews da Comunidade</Text>
-              <Text style={styles.reviewCount}>{reviews.length}</Text>
-            </View>
+            )}
+            <Text style={styles.usernameText}>@{profile.username}</Text>
+            <Text style={styles.sectionHeader}>
+              Filmes Curtidos ({movies.length})
+            </Text>
           </View>
-        )}
-        // Cada item da lista é um review
-        renderItem={({ item }) => (
-          <View style={styles.reviewItem}>
-            <View style={styles.reviewHeader}>
-              <View style={styles.userInfo}>
-                 {/* Avatar do usuário que fez o review */}
-                 {item.profiles?.avatar_url ? (
-                    <Image source={{ uri: item.profiles.avatar_url }} style={styles.avatar} />
-                 ) : (
-                    <Ionicons name="person-circle" size={32} color="#8E8E93" />
-                 )}
-                 <Text style={styles.username}>{item.profiles?.username || 'Usuário'}</Text>
-              </View>
-              {/* Estrelas que ele deu */}
-              <StarRating rating={item.rating} size={14} />
-            </View>
-            {/* Comentário */}
-            {item.comment && <Text style={styles.comment}>{item.comment}</Text>}
-          </View>
-        )}
-        ListEmptyComponent={
-          <Text style={styles.emptyText}>Ninguém avaliou este filme ainda. Seja o primeiro!</Text>
         }
-        contentContainerStyle={{ paddingBottom: 40 }}
+        ListEmptyComponent={
+           <Text style={styles.emptyText}>
+             Este usuário ainda não curtiu nenhum filme.
+           </Text>
+        }
       />
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#1C1C1E' },
-  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#1C1C1E' },
-  backdrop: { width: '100%', height: 250, resizeMode: 'cover', opacity: 0.8 },
-  infoContainer: { padding: 20 },
-  title: { fontFamily: 'Inter-Bold', fontSize: 24, color: '#FFFFFF', marginBottom: 8 },
-  metaRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
-  metaText: { color: '#8E8E93', marginLeft: 4, fontFamily: 'Inter-Regular' },
-  overview: { color: '#E5E5EA', fontFamily: 'Inter-Regular', lineHeight: 22, fontSize: 15 },
-  
-  sectionHeader: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    alignItems: 'center', 
-    paddingHorizontal: 20, 
-    marginTop: 10, 
-    marginBottom: 16,
-    borderTopWidth: 1,
-    borderTopColor: '#2C2C2E',
-    paddingTop: 20
+  safeArea: { flex: 1, backgroundColor: '#1C1C1E' },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  lista: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 32 },
+  emptyText: { color: '#8E8E93', fontFamily: 'Inter-Regular', fontSize: 16, textAlign: 'center', marginTop: 20 },
+  headerContainer: {
+    paddingVertical: 24,
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: '#3A3A3C',
+    marginBottom: 10,
   },
-  sectionTitle: { fontFamily: 'Inter-Bold', fontSize: 18, color: '#FFFFFF' },
-  reviewCount: { color: '#8E8E93', fontFamily: 'Inter-Regular' },
-  
-  reviewItem: { backgroundColor: '#2C2C2E', padding: 16, marginHorizontal: 20, marginBottom: 12, borderRadius: 12 },
-  reviewHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-  userInfo: { flexDirection: 'row', alignItems: 'center' },
-  avatar: { width: 32, height: 32, borderRadius: 16, marginRight: 8, backgroundColor: '#3A3A3C' },
-  username: { color: '#FFFFFF', fontFamily: 'Inter-Bold', marginLeft: 4 },
-  comment: { color: '#E5E5EA', fontFamily: 'Inter-Regular', lineHeight: 20 },
-  emptyText: { color: '#8E8E93', textAlign: 'center', marginTop: 20, fontStyle: 'italic' },
+  avatarImage: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: '#3A3A3C',
+    marginBottom: 16,
+  },
+  avatarPlaceholder: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: '#E5E5EA',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  usernameText: {
+    fontFamily: 'Inter-Bold',
+    color: '#FFFFFF',
+    fontSize: 26,
+    marginBottom: 24,
+  },
+  sectionHeader: {
+    fontFamily: 'Inter-Bold',
+    color: '#FFFFFF',
+    fontSize: 20,
+    alignSelf: 'flex-start',
+  },
 });

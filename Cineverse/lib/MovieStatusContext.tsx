@@ -9,7 +9,6 @@ import { supabase } from './supabase';
 import { Session } from '@supabase/supabase-js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Alert } from 'react-native';
-import { decode } from 'base-64';
 
 // --- Tipos ---
 interface Movie {
@@ -50,11 +49,13 @@ interface MovieStatusContextType {
   session: Session | null;
   profile: Profile | null;
   signOut: () => void;
-  updateAvatar: (base64Data: string) => Promise<void>;
+  updateAvatar: (imageUri: string) => Promise<void>;
+  updateUsername: (newUsername: string) => Promise<boolean>;
   toggleLikeMovie: (movie: Movie) => void;
   toggleDislikeMovie: (movie: Movie) => void;
   toggleSaveMovie: (movie: Movie) => void;
   addReview: (movie: Movie, rating: number, comment: string) => Promise<void>;
+  deleteReview: (movieId: number) => Promise<void>;
   getMyReview: (movieId: string) => Promise<Review | null>;
 }
 
@@ -157,31 +158,76 @@ export const MovieStatusProvider: React.FC<{ children: ReactNode }> = ({
     }
   };
 
-  const updateAvatar = async (base64Data: string) => {
+  const updateUsername = async (newUsername: string): Promise<boolean> => {
+    if (!session) return false;
+    if (newUsername.length < 3) {
+      Alert.alert('Erro', 'O nome de usuário deve ter pelo menos 3 caracteres.');
+      return false;
+    }
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ username: newUsername })
+        .eq('id', session.user.id);
+
+      if (error) {
+        if (error.code === '23505') {
+          Alert.alert('Nome indisponível', `O usuário "${newUsername}" já está sendo usado.`);
+          return false;
+        }
+        throw error;
+      }
+      setProfile((prev) => prev ? { ...prev, username: newUsername } : null);
+      Alert.alert('Sucesso', 'Nome de usuário atualizado!');
+      return true;
+    } catch (e: any) {
+      console.error('Erro ao atualizar username:', e);
+      Alert.alert('Erro', 'Não foi possível atualizar o nome de usuário.');
+      return false;
+    }
+  };
+
+  const updateAvatar = async (imageUri: string) => {
     if (!session || !profile) {
       Alert.alert('Erro', 'Você precisa estar logado para mudar o avatar.');
       return;
     }
+
     try {
-      const filePath = `${session.user.id}/avatar.png`;
+      const response = await fetch(imageUri);
+      const blob = await response.blob();
+
+      const fileExt = imageUri.split('.').pop()?.toLowerCase() || 'png';
+      const fileName = `avatar.${fileExt}`;
+      const filePath = `${session.user.id}/${fileName}`;
+
       const { error: uploadError } = await supabase.storage
         .from('avatars')
-        .upload(filePath, decode(base64Data), {
-          contentType: 'image/png',
+        .upload(filePath, blob, {
+          contentType: `image/${fileExt}`,
           upsert: true,
         });
+
       if (uploadError) throw uploadError;
 
-      const { data } = supabase.storage.from('avatars').getPublicUrl(filePath);
+      const { data } = supabase.storage
+        .from('avatars')
+        .getPublicUrl(filePath);
+        
       if (!data || !data.publicUrl) throw new Error('Erro na URL pública.');
 
       const publicUrlWithCacheBust = `${data.publicUrl}?t=${Date.now()}`;
+
       const { error: updateError } = await supabase
         .from('profiles')
-        .update({ avatar_url: publicUrlWithCacheBust, updated_at: new Date().toISOString() })
+        .update({
+          avatar_url: publicUrlWithCacheBust,
+          updated_at: new Date().toISOString(),
+        })
         .eq('id', session.user.id);
 
       if (updateError) throw updateError;
+
       setProfile({ ...profile, avatar_url: publicUrlWithCacheBust });
       Alert.alert('Sucesso!', 'Foto de perfil atualizada.');
     } catch (e: any) {
@@ -212,31 +258,42 @@ export const MovieStatusProvider: React.FC<{ children: ReactNode }> = ({
     });
   };
 
-  // --- CORREÇÃO AQUI ---
   const addReview = async (movie: Movie, rating: number, comment: string) => {
     if (!session) return;
-
     try {
       await addMovieToSupabase(movie);
       const numericMovieId = parseInt(movie.id, 10);
-
-      // Agora dizemos ao Supabase: "Se der conflito nas colunas user_id e movie_id, ATUALIZE!"
       const { error } = await supabase.from('reviews').upsert({
         user_id: session.user.id,
         movie_id: numericMovieId,
         rating: rating,
         comment: comment,
-      }, { onConflict: 'user_id, movie_id' }); // <--- ESTA É A MÁGICA
+      }, { onConflict: 'user_id, movie_id' });
 
       if (error) throw error;
-      
       Alert.alert('Sucesso!', 'Sua avaliação foi salva.');
     } catch (e: any) {
       console.error('Erro ao salvar review:', e);
       Alert.alert('Erro', 'Não foi possível salvar sua avaliação.');
     }
   };
-  // --- FIM DA CORREÇÃO ---
+
+  const deleteReview = async (movieId: number) => {
+    if (!session) return;
+    try {
+      const { error } = await supabase
+        .from('reviews')
+        .delete()
+        .eq('user_id', session.user.id)
+        .eq('movie_id', movieId);
+
+      if (error) throw error;
+      Alert.alert('Sucesso', 'Review apagado.');
+    } catch (e: any) {
+      console.error('Erro ao apagar review:', e);
+      Alert.alert('Erro', 'Não foi possível apagar o review.');
+    }
+  };
 
   const getMyReview = async (movieId: string): Promise<Review | null> => {
     if (!session) return null;
@@ -285,7 +342,9 @@ export const MovieStatusProvider: React.FC<{ children: ReactNode }> = ({
     profile,
     signOut,
     updateAvatar,
+    updateUsername,
     addReview,
+    deleteReview,
     getMyReview,
     movieStatus,
     allMovies: Object.values(allMovies),
